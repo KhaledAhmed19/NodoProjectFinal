@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter, Switch, Route } from "react-router-dom";
-import axios from "axios";
 import Header from "./components/layout/Header";
 import Home from "./components/pages/home/Home";
 import Login from "./components/auth/Login";
 import Register from "./components/auth/Register";
+import Reset from "./components/auth/Reset";
+import NewPassword from "./components/auth/NewPassword";
+import Verify from "./components/auth/Verify";
 import UserContext from "./context/UserContext";
 import vimeo from './apis/vimeo';
-import VideoList from './components/pages/vidoes/VideoList';
-import VideoDetail from './components/pages/vidoes/VideoDetail'
+import VideoItem from './components/pages/vidoes/VideoItem';
+import VideoCard from './components/pages/vidoes/VideoCard';
+import VideoCategory from './components/pages/vidoes/VideoCategory';
 import VideoContext from "./context/VideoContext";
 
 
@@ -24,50 +27,7 @@ export default function App() {
   const [videos, setVideos] = useState([])
   const [selectedVideo, setSelectedVideo] = useState(null)
 
-  const onTermSubmit = async () => {
-    const response = await vimeo.get('/users/134710807', {
-      headers: {
-        Authorization: 'bearer 1db8a14552d7b885b42465cc03cd7276'
-      }
-    })
-  
-
-    
-        console.log(response.data)      
-     
-   
-  };
-
-
-  useEffect(() => {
-  /*  const checkLoggedIn = async () => {
-      let token = localStorage.getItem("auth-token");
-      if (token === null) {
-        localStorage.setItem("auth-token", "");
-        token = "";
-      }
-      const tokenRes = await Axios.post(
-        "http://localhost:5000/users/tokenIsValid",
-        null,
-        { headers: { "auth-token": token } }
-      );
-      if (tokenRes.data) {
-        const userRes = await Axios.get("http://localhost:5000/users/", {
-          headers: { "auth-token": token },
-        });
-        setUserData({
-          token,
-          user: userRes.data,
-        });
-      }
-    }; */
-
-   // checkLoggedIn();
-    onTermSubmit();
-   /* document.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-    });*/
-  }, []);
+ 
 
   return (
     <>
@@ -79,10 +39,14 @@ export default function App() {
             <Switch>
             <Route exact path="/" component={Register} />
               <Route exact path="/home" component={Home} />
-              <Route exact path="/videos" component={VideoList} />
-              <Route exact path="/videoDetail" component={VideoDetail} />
+              <Route exact path="/videos" component={VideoItem} />
+              <Route exact path="/cards" component={VideoCard} />
+              <Route exact path="/category" component={VideoCategory} />
               <Route path="/login" component={Login} />
               <Route path="/register" component={Register} />
+              <Route path="/verifyScreen" component={Verify} />
+              <Route exact path="/reset" component={Reset} />
+              <Route path="/reset/:token" component={NewPassword} />
             </Switch>
           </div>
           </VideoContext.Provider>

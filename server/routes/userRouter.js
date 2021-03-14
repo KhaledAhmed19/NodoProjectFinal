@@ -4,7 +4,18 @@ const jwt = require("jsonwebtoken");
 const auth = require("../middleware/auth");
 const User = require("../models/userModel");
 const stripe = require("stripe")("sk_test_51INgaAISGLv8KvGgScijLosEsQr6zMb93u8DqmnPFXi8hISI94LDtyptw3aJm9F9ZhlauDtbnwDfAnjzfhAp2uVh00sR9QK6VK");
-//const { v4: uuidv4 } = require('uuid');
+const nodemailer = require('nodemailer')
+const sendgridTransport = require('nodemailer-sendgrid-transport')
+const crypto = require('crypto')
+const sgMail = require('@sendgrid/mail')
+sgMail.setApiKey("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")
+
+
+const transporter = nodemailer.createTransport(sendgridTransport({
+  auth:{
+      api_key:'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'
+  }
+}))
 
 router.post("/register", async (req, res) => {
   try {
@@ -37,7 +48,11 @@ router.post("/register", async (req, res) => {
     const newUser = new User({
       email,
       password: passwordHash,
-      subscribed: false
+      subscribed: false,
+      subId: '',
+      resetToken: '',
+      expireToken: null
+
       
     });
     const savedUser = await newUser.save();
@@ -115,9 +130,11 @@ router.get("/", auth, async (req, res) => {
 router.put("/changeStatus", async (req, res) => {
   const id = req.body.id;
   const status = req.body.subscribed;
+  const subId = req.body.subId
   try {
     await User.findById(id, (err, updatedStatus)=> {
       updatedStatus.subscribed = status;
+      updatedStatus.subId = subId;
       updatedStatus.save()
       res.send(updatedStatus)
     })
@@ -126,36 +143,118 @@ router.put("/changeStatus", async (req, res) => {
   }
 });
 
-router.post('/sub', async (req, res) => {
-  const {email, payment_method} = req.body;
+router.post("/reset-password",(req,res)=>{
+  crypto.randomBytes(32,(err,buffer)=>{
+      if(err){
+          console.log(err)
+      }
+      const token = buffer.toString("hex")
+      User.findOne({email:req.body.email})
+      .then(user=>{
+          if(!user){
+              return res.status(422).json({error:"User dont exists with that email"})
+          }
+          user.resetToken = token
+          user.expireToken = Date.now() + 3600000
+          user.save()
+          .then((result)=>{
+              const msg = {
+                  to:user.email,
+                  from:"khaled@nodogoro.com",
+                  subject:"password reset",
+                  html:`
+                  <p>You requested for password reset</p>
+                  <a href="http://localhost:3000/reset/${token}"> Click this link </a>
+                  `
+              }
+              sgMail.send(msg)
+          })
 
-  const customer = await stripe.customers.create({
-    payment_method: payment_method,
-    email: email,
-    invoice_settings: {
-      default_payment_method: payment_method,
-    },
-  });
-
-  const subscription = await stripe.subscriptions.create({
-    customer: customer.id,
-    items: [{ price: 'price_1IOIb9ISGLv8KvGgKeWPHTvF' }],
-    expand: ['latest_invoice.payment_intent']
-  });
-  
-  const status = subscription['latest_invoice']['payment_intent']['status'] 
-  const client_secret = subscription['latest_invoice']['payment_intent']['client_secret']
-  
-  
-  res.json({'client_secret': client_secret, 'status': status});
+      })
+  })
 })
 
-/*router.post('/unsubscribe', async (req, res) => {
+
+router.post("/new-password",(req,res)=>{
+ const newPassword = req.body.password
+ const sentToken = req.body.token
+ User.findOne({resetToken:sentToken,expireToken:{$gt:Date.now()}})
+ .then(user=>{
+     if(!user){
+         return res.status(422).json({error:"Try again session expired"})
+     }
+     bcrypt.hash(newPassword,12).then(hashedpassword=>{
+        user.password = hashedpassword
+        user.resetToken = undefined
+        user.expireToken = undefined
+        user.save().then((saveduser)=>{
+            res.json({message:"password updated success"})
+        })
+     })
+ }).catch(err=>{
+     console.log(err)
+ })
+})
+
+
+
+
+router.post('/sub', async (req, res) => {
+  const {email, paymentMethodId} = req.body;
+
   
-  const deletedSubscription = await stripe.subscriptions.del(
-    req.body.subscriptionId
-  );
-  res.send(deletedSubscription);
-});*/
+  const customer = await stripe.customers.create({
+    email,
+  });
+
+  let paymentMethod;
+  try {
+    paymentMethod = await stripe.paymentMethods.attach(
+      paymentMethodId, {
+        customer: customer.id,
+      }
+    );
+  } catch (error) {
+    return res.status(400).send({ error: { message: error.message } });
+  }
+
+  
+  const priceId = "price_1IOIb9ISGLv8KvGgKeWPHTvF";
+
+  const subscription = await stripe.subscriptions.create({
+    default_payment_method: paymentMethod.id,
+    customer:customer.id,
+    items: [{
+      price: priceId,
+    }],
+    collection_method: 'send_invoice',
+    days_until_due: 30,
+    expand: ['latest_invoice.payment_intent'],
+  });
+
+  res.send({ subscription });
+
+ 
+})
+
+
+
+router.post('/unsubscribe', async (req, res) => {
+  // Cancel the subscription
+  
+  try {
+    await User.findById(req.body.id, (err, updatedStatus)=> {
+      const deletedSubscription =  stripe.subscriptions.del(
+        updatedStatus.subId
+      );
+    
+      res.send({ subscription: deletedSubscription });
+    })
+  } catch(err){
+    res.status(500).json({error: err.message})
+  }
+  
+});
+
 
 module.exports = router;

@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import UserContext from "../../context/UserContext";
 import Axios from "axios";
 import ErrorNotice from "../misc/ErrorNotice";
+import {auth} from './firebase'
 
 
 export default function Register() {
@@ -20,6 +21,7 @@ export default function Register() {
     e.preventDefault();
 
     try {
+      
       const newUser = { email, password, passwordCheck};
       await Axios.post("http://localhost:5000/users/register", newUser);
       const loginRes = await Axios.post("http://localhost:5000/users/login", {
@@ -31,7 +33,24 @@ export default function Register() {
         user: loginRes.data.user,
       });
       localStorage.setItem("auth-token", loginRes.data.token);
-      history.push("/home");
+      await auth.createUserWithEmailAndPassword(email, password)
+      auth.onAuthStateChanged(function(user) {
+        if (user) {
+            user.sendEmailVerification()
+            window.alert("verification email sent!!")
+        } else {
+            console.log("no user found")
+        }
+      });
+      
+      history.push("/verifyScreen");
+      
+      
+
+    
+      
+    
+      
     } catch (err) {
       err.response.data.msg && setError(err.response.data.msg);
     }

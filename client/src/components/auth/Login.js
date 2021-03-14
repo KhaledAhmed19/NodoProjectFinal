@@ -1,8 +1,10 @@
 import React, { useState, useContext } from "react";
+import {Link} from 'react-router-dom'
 import { useHistory } from "react-router-dom";
 import UserContext from "../../context/UserContext";
 import Axios from "axios";
 import ErrorNotice from "../misc/ErrorNotice";
+import firebase from './firebase'
 
 export default function Login() {
   const [email, setEmail] = useState();
@@ -58,6 +60,7 @@ export default function Login() {
         />
 
         <input type="submit" value="Log in" />
+        <Link to="/reset">Forget Password??</Link>
       </form>
     </div>
   );

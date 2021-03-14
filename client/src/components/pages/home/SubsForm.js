@@ -18,72 +18,96 @@ toast.configure();
 export default function SubsForm() {
   const history = useHistory()
   const { userData } = useContext(UserContext);
+  const [flag, setFlag] = useState(false)
   
   const [email, setEmail] = useState('');
 
   const stripe = useStripe();
   const elements = useElements();
+  
 
+
+  
 
   const handleSubmitSub = async (event) => {
-    if (!stripe || !elements) {
+
+    event.preventDefault();
+
+    
+    const cardElement = elements.getElement(CardElement);
+
+    let { error, paymentMethod } = await stripe.createPaymentMethod({
+      type: 'card',
+      card: cardElement,
+      billing_details: {
+        email,
+      }
+    });
+
+    if(error) {
      
       return;
     }
 
-    const result = await stripe.createPaymentMethod({
-      type: 'card',
-      card: elements.getElement(CardElement),
-      billing_details: {
-        email: email,
+    setFlag(true)
+    let {subError, subscription} = await fetch('http://localhost:5000/users/sub', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-    });
+      body: JSON.stringify({
+        paymentMethodId: paymentMethod.id,
+        email
+      }),
+    }).then(r => r.json());
 
-    if (result.error) {
-      toast(result.error, { type: "error" });
-    } else {
-      const res = await axios.post('http://localhost:5000/users/sub', {'payment_method': result.paymentMethod.id, 'email': email});
-      const {client_secret, status} = res.data;
-      
-      
-
-      if (status === 'requires_action') {
-        stripe.confirmCardPayment(client_secret).then(function(result) {
-          if (result.error) {
-            toast(result.error, { type: "error" });
-          } else {
-            toast("Success! Check email for details", { type: "success" });
-            history.push("/videos")
-            
-          }
-        });
-      } else {
-        toast("Success! Check email for details", { type: "success" });
-        await axios.put('http://localhost:5000/users/changeStatus', {id: userData.user.id, subscribed: true})
-        history.push("/videos")
-        
-      }
-      
+    if(subError) {
+      return;
     }
-  };
 
-  return (
-    <Card style={{marginTop: '40px'}}>
+
+    switch(subscription.status) {
+      case 'active':
+         await axios.put('http://localhost:5000/users/changeStatus', {id: userData.user.id, subscribed: true, subId: subscription.id})
+        history.push("/videos")
+        break;
+
+
+      case 'incomplete':
+        const {error} = await stripe.confirmCardPayment(
+          subscription.latest_invoice.payment_intent.client_secret,
+        )
+
+        if(error) {
+          window.alert(error.message)
+        
+        } else {
+          window.alert("Success! Redirecting to your account.")
+          
+        }
+        break;
+
+
+      default:
+        window.alert(`Unknown Subscription status: ${subscription.status}`)
+    }
+  }
+
+  return flag ? (
+  <div className="ui active dimmer">
+    <div className="ui text loader">Processing your subscription
+  </div>
+</div>
+  
+) 
+    : (
+      <Card style={{marginTop: '40px'}}>
       <CardContent >
-        <TextField
-          label='Email'
-          id='outlined-email-input'
-          helperText={`Email you'll recive updates and receipts on`}
-          autoComplete="off"
-          margin='normal'
-          variant='outlined'
-          type='email'
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          fullWidth
-        />
-        <CardInput />
+      <CardInput />
+      <div className="ui input">
+        <input type="text" placeholder="Enter your email here.."  onChange={(e) => setEmail(e.target.value)}
+          style={{marginTop: '4px'}}/>
+         </div>
         <div >
           <Button variant="contained"  style={{backgroundColor: "#bf8efc", fontSize: "1.1rem",  marginTop: '20px', marginLeft: '100px'}} onClick={handleSubmitSub}>
             Subscribe
@@ -91,6 +115,6 @@ export default function SubsForm() {
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
